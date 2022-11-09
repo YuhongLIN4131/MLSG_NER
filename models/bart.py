@@ -446,8 +446,7 @@ class FBartDecoder(Seq2SeqDecoder):
             decoder_layer = Attention(hidden_size, 1)
             # self.Attend = SSNTransformerDecoder(decoder_layer=decoder_layer, num_layers=3,d_model=hidden_size)
             # self.Attend = SSNTransformerDecoder(self.hid_size,len(label_ids))
-            #
-            self.Attend = Attention_layer(decoder_layer,3)
+            self.Attend = Attention_layer(decoder_layer,1)
             '''使用LSTM吸收标签间的交互信息'''
             # self.birnn = nn.LSTM(hidden_size,self.hid_size, num_layers=1, bidirectional=True,
             #                      batch_first=True)
@@ -569,8 +568,6 @@ class CaGFBartDecoder(FBartDecoder):
         src_mask1 = mask_query  # 不等于填充的值
         if self.target_type == "word":
             all_embedding = torch.cat((
-            #                            self.decoder.embed_tokens.weight[0:1].unsqueeze(0).expand(len(state.encoder_output),-1,-1),
-            #                            self.decoder.embed_tokens.weight[2:3].unsqueeze(0).expand(len(state.encoder_output),-1,-1),
                                        state.encoder_output[:, 0:1, :],
                                        state.encoder_output.gather(
                                            index=(src_seq_len - 1).unsqueeze(2).expand(-1, -1, hidden_size), dim=1),
@@ -587,11 +584,6 @@ class CaGFBartDecoder(FBartDecoder):
         target_tokens_output = all_embedding.gather(
             index=tokens.unsqueeze(2).expand(-1, -1, hidden_size),
             dim=1)
-        '''为每个条件句子添加实体类别标签'''
-        # label_start = self.decoder.embed_tokens.weight[tokens[:, 1:2] - 2]
-        # mas  = torch.ones_like(tokens[:, 1:2])==1
-        # src_encoder_outputs = torch.cat((label_start,src_encoder_outputs),dim=1)
-        # src_encoder_pad_mask =torch.cat((mas,src_encoder_pad_mask),dim=1)
         '''综合encoder的编码和word_embedding'''
         if self.training and test==False:
             '''注意Discriminator时最大长度是不包括结束符的'''
@@ -659,14 +651,9 @@ class CaGFBartDecoder(FBartDecoder):
             (hidden_state.size(0), hidden_state.size(1), all_embedding.size(1)),
             fill_value=-1e30)
         batch_size, scr_seq_len, hidden_size = all_embedding.size()
-        word_scores_index = (tokens[:, 1:2] - 2).unsqueeze(1).unsqueeze(2).expand(-1, target_len, scr_seq_len, -1)
         if(self.use_biaffine1):
             #候选集对于标签的分数
             word_scores = self.label_biaffine(self.dropout_layer(hidden_state), self.dropout_layer(all_embedding))
-            # word_scores += self.label2_biaffine(self.dropout_layer(target_tokens_output), self.dropout_layer(all_embedding))
-            #每一种标签使用一种biaffine
-            # word_scores = word_scores.gather(index=word_scores_index,dim=3).squeeze(-1)
-            #
         else:
             word_scores=torch.einsum('blh,bnh->bln', self.dropout_layer(hidden_state), self.dropout_layer(all_embedding))
         logits[:, :, 1:] = word_scores[:, :, 1:]
@@ -698,72 +685,6 @@ class CaGFBartDecoder(FBartDecoder):
                                                len(self.mapping):] & embedding_mask  # 只让需要计算的标签attend
 
         if self.use_cat:
-            '''1、得到两部分的mask编码和距离编码，再整合一起'''
-            '''仅仅只是可能的标签之间进行attend'''
-            '''
-                1、换一个方案保留原编码
-            '''
-            # CLN_Decoder_Encoder = all_embedding.unsqueeze(1).expand(-1,target_len,-1, -1)
-            # #使用lstm吸取信息
-            # # CLN_Decoder_Encoder = self.label_biaffine2(hidden_state, all_embedding)  # batch_size,
-            # hidden_size = CLN_Decoder_Encoder.size(-1)
-            # '''应该整合一下，给出位置不为空的点
-            #     CLN_Decoder_Encoder [batch,target_len,mask_query_len,1024]
-            # '''
-            # mask_query = mask_query.view(-1,scr_seq_len)
-            # CLN_Decoder_Encoder = CLN_Decoder_Encoder.reshape(-1,hidden_size)
-            # CLN_pos = torch.nonzero(mask_query.reshape(-1)).squeeze(-1)
-            # Effective_embedding = CLN_Decoder_Encoder[CLN_pos]
-            # '''需要把CLN_Decoder_Encoder中对应不为mask的放在前面'''
-            # mask_encoder_outputs = seq_len_to_mask(mask_query.long().sum(dim=-1), max_len=scr_seq_len+1)
-            # encoder_outputs = torch.zeros([batch_size*target_len*(scr_seq_len+1),hidden_size]).to(mask_query.device)
-            # # 长度+2
-            # encoder_pos = torch.nonzero(mask_encoder_outputs.view(-1)).squeeze(-1)
-            # new_encoder_pos = torch.nonzero(seq_len_to_mask(mask_query.long().sum(dim=-1), max_len=scr_seq_len).view(-1)).squeeze(-1)
-            # encoder_outputs[encoder_pos]=Effective_embedding
-            # '''然后放最后一个'''
-            # target_pos = mask_query.long().sum(dim=-1)+1 + torch.arange(0,batch_size*target_len*(scr_seq_len+1),(scr_seq_len+1)).to(mask_query.device)
-            # '''给出每个序列对应的目标embedding[batch_size*target_len*(scr_seq_len+1),hidden_size]'''
-            # target_embedding = hidden_state.repeat_interleave(scr_seq_len+1,dim=1).reshape(-1,hidden_size)[target_pos]
-            # encoder_outputs[target_pos] = target_embedding
-            # encoder_outputs =  encoder_outputs.view(-1,scr_seq_len+1,hidden_size)
-            # start_em = hidden_state.reshape(-1,hidden_size).unsqueeze(1)
-            # encoder_outputs = torch.cat((start_em,encoder_outputs),dim=1)
-            # # 头好放，尾巴不好放
-            # #安排位置
-            # '''放完之后就需要计算了'''
-            # length = mask_query.long().sum(dim=-1)+2#每个里面的长度
-            # sorted, indices = torch.sort(length, descending=True)
-            # indices_pos = torch.nonzero(sorted>2).squeeze(-1)
-            # indices=indices[indices_pos]
-            # sorted=sorted[indices_pos]
-            # '''给结果添加目标编码，让源和目标进行双向lstm:显示结果为：
-            # 目标编码+可能结果+目标编码'''
-            # embed_input_x_packed = torch.nn.utils.rnn.pack_padded_sequence(encoder_outputs[indices],
-            #                                                                sorted.detach().cpu().numpy().tolist(),
-            #                                                                batch_first=True)
-            # encoder_outputs_packed, _ = self.birnn(embed_input_x_packed)
-            # outputs, _ = torch.nn.utils.rnn.pad_packed_sequence(encoder_outputs_packed, batch_first=True)
-            # outputs = outputs[:,1:-1]#填充的肯定不需要了
-            # #
-            # # outputs = outputs.reshape(len(indices),-1,len(self.label_ids),hidden_size//2).gather(index=word_scores_index, dim=3).squeeze(-1)
-            # # word_scores_2 = self.special_output(torch.cat((outputs.float(),(ATTEND_embed_outputs[indices,0:outputs.size(1)])),dim=-1)).squeeze(-1).float()
-            # word_scores_2 = self.special_output(outputs.float()).squeeze(-1).float()
-            # result_score = torch.zeros_like(logits)
-            # result_score = result_score.view(-1,scr_seq_len).float()
-            # result_score[indices,0:word_scores_2.size(1)] = word_scores_2
-            # logits=logits.view(-1)
-            # logits[CLN_pos] += result_score.reshape(-1)[new_encoder_pos]
-            # logits = logits.reshape(batch_size,target_len,scr_seq_len)
-            # mask_query = mask_query.reshape(batch_size,target_len,scr_seq_len)
-            #
-            # total_embedding=torch.zeros([batch_size,target_len,scr_seq_len,hidden_size]).to(mask_query.device).view(-1,hidden_size)
-            # total_embedding[posit]=CLN_Decoder_Encoder
-            # total_embedding=total_embedding.reshape(batch_size,target_len,scr_seq_len,-1)#
-            # total_embedding = self.yasuo(total_embedding)
-            #使用biaffine来综合信息
-            '''用transformer吸收标签间信息'''
-            #第一步得到有哪些embedding
             index = torch.arange(batch_size).repeat_interleave(target_len).to(hidden_state.device)
             pos = torch.nonzero(decoder_mask1.reshape(-1)).squeeze(-1)
             index=index[pos]
@@ -781,42 +702,7 @@ class CaGFBartDecoder(FBartDecoder):
             logits[pos][:,1:2] += word_scores_2[:,0:1]
             logits[pos][:,len(self.mapping)+1:] += word_scores_2[:,1:]
             logits = logits.reshape(batch_size, target_len, scr_seq_len)
-            #
-            #找对应的tgt编码
-
-            # total_embedding=self.label_biaffine2(aim_embedding,all_embedding)#batch_size,
-            # # '''通过CLN的编码'''
-            # # print(total_embedding.size())
-            # if self.label_Attend:#是否进行标签交互操作
-            #     '''在这里对于填充的字可以直接删除掉，减少消耗'''
-            #     # ATTEND_embed = self.Attend(total_embedding.reshape(-1,scr_seq_len,total_embedding.size(3)),
-            #     #                            mask_query.view(-1,scr_seq_len),word_scores_index.reshape(-1,scr_seq_len,1))#放到两位
-            #     ATTEND_embed = self.Attend(total_embedding.reshape(-1, scr_seq_len, total_embedding.size(3)),
-            #                                mask_query.view(-1, scr_seq_len)
-            #                               )  # 放到两位
-            #     ATTEND_embed = ATTEND_embed.reshape(batch_size,target_len,scr_seq_len,-1)#整合回来
-            # else:
-            #     ATTEND_embed=total_embedding
-            # if self.use_distance_embedding:
-            #     entity_lengths = torch.clamp(entity_lengths, 0, 20)
-            #     entity_lengths_embedding = self.distance_embedding(entity_lengths).squeeze(-1)  # 字字距离编码
-            #     distance_embedding = torch.cat((entity_lengths_embedding.unsqueeze(2).expand(-1, -1, len(self.mapping),
-            #                                                                                  -1),self.distance_embedding(distance)), dim=-2)  # 词词距离编码
-            #     word_scores_2 = self.special_output(torch.cat((ATTEND_embed,distance_embedding),dim=-1)).squeeze(-1)#最后结果
-            # else:
-            #     # print("标志")
-            #     # print(ATTEND_embed.size())
-            #     word_scores_2 = self.special_output(ATTEND_embed).squeeze(-1)  # 最后结果
-            # logits = logits+word_scores_2
-            # logits = word_scores_2
         logits = logits.masked_fill(~mask_query,-1e30)  # 必须相连
-        #超过的必须为
-        # logits[:,:,0] = -1e30
-        '''编码需要起点约束'''
-        # if self.target_type=="bpe":
-        #     logits[:, :, len(self.mapping):] = logits[:, :, len(self.mapping):].masked_fill(must_word, 1e30)  # 必须相连
-        #     logits[:, :, 1:len(self.mapping)] =logits[:, :, 1:len(self.mapping)].masked_fill((token_tail_flag.unsqueeze(2)==1), -1e30)
-        # logits = logits.masked_fill(~mask_query, -1e30)  ##填充值的分数补上负无穷
         return logits
 
 
@@ -899,17 +785,8 @@ class BartSeq2SeqModel(Seq2SeqModel):
             '''根据attention合并分词'''
             decoder_encoder = encoder_outputs.unsqueeze(1).expand(-1, seq_OOV_lenn, -1, -1).gather(
                 index=OOV_con_now.unsqueeze(3).expand(-1, -1, -1, hidden_size), dim=2)
-            # Attention = self.decoder.weight_layer(torch.cat((encoder_outputs, encoder_outputs[:,0:1].expand(-1,encoder_outputs.size(1),-1)),
-            #                                                 dim=-1)).squeeze(-1)
-            # attention_OOV = Attention.unsqueeze(1).expand(-1, seq_OOV_lenn, -1).gather(
-            #     index=OOV_con_now, dim=2)  ##现在已经取得了attention
-            # attention_OOV = attention_OOV.masked_fill((~OOV_flag), -1e30)
-            # attention_OOV = torch.softmax(attention_OOV, dim=-1)
-            # decoder_encoder = (decoder_encoder * attention_OOV.unsqueeze(3) * OOV_flag.unsqueeze(3)).sum(dim=-2)
-            '''使用最大池化的效果'''
             min_data = torch.min(decoder_encoder) - 1
             decoder_encoder = (OOV_flag.unsqueeze(3) * decoder_encoder + (~OOV_flag.unsqueeze(3)) * min_data).max(dim=2)[0]
-            ''''''
             org_embedding = encoder_outputs
             org_mask = mask
         elif self.decoder.target_type=='word':#直接使用原编码
@@ -1000,13 +877,6 @@ class BartSeq2SeqModel(Seq2SeqModel):
             state=BartState(decoder_encoder[pos1], decoder_encoder_mask[pos1], mask_query[pos1]
                             ,org_mask[pos1],org_embedding[pos1],tgt_seq_len[noo_entity_pos])
             decoder_output[noo_entity_pos,0:8] = self.decoder(tgt_tokens1, state)#问题是有可能有些batch没有机会有起点
-        # if ((all_word_entity_length >8) & (all_word_entity_length <=18)).sum() > 0:#可能也没有
-        #     noo_entity_pos = torch.nonzero((all_word_entity_length >8) & (all_word_entity_length <=18)).squeeze(-1)
-        #     pos1 = indices[noo_entity_pos]
-        #     tgt_tokens1= tgt_tokens[noo_entity_pos,0:18]#只需要前3个
-        #     state=BartState(decoder_encoder[pos1], decoder_encoder_mask[pos1], src_embed_outputs[pos1], mask_query[pos1]
-        #                     ,org_mask[pos1],org_embedding[pos1],tgt_seq_len[noo_entity_pos])
-        #     decoder_output[noo_entity_pos,0:16] = self.decoder(tgt_tokens1, state)#问题是有可能有些batch没有机会有起点
         '''第二步：3-6长度的'''
         if (all_word_entity_length > 10).sum()>0:
             '''再调用两次一次划分为<=6，另一个是6之后的，用时间换空间（因为有些数据集中的实体数量太多了）'''
