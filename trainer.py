@@ -58,7 +58,7 @@ TASK_ID2_OTHERLR={"Onto":1e-3,"conll03":1e-3,"ace2004":1e-3,"ace2005":1e-3,'geni
 TASK_ID2_epoch={"Onto":30,"conll03":30,"ace2004":30,"ace2005":30,'genia':30,'cadec':30,'share2013':30,'share2014':30}
 TASK_ID2_warm_up={"Onto":0.1,"conll03":0.1,"ace2004":0.1,"ace2005":0.1,'genia':0.1,'cadec':0.1,'share2013':0.1,'share2014':0.1}
 TASK_ID2_batch_size={"Onto":16,"conll03":16,"ace2004":16,"ace2005":8,'genia':16,'cadec':16,'share2013':16,'share2014':16}
-TASK_ITEST_batch_size={"Onto":32,"conll03":32,"ace2004":32,"ace2005":32,'genia':16,'cadec':32,'share2013':32,'share2014':24}
+TASK_ITEST_batch_size={"Onto":32,"conll03":32,"ace2004":48,"ace2005":32,'genia':16,'cadec':32,'share2013':32,'share2014':24}
 Dis={"Onto":False,"conll03":False,"ace2004":False,"ace2005":False,'genia':False,'cadec':True,'share2013':True,'share2014':True}
 
 Dataset_label_number = [18, 4, 7, 7, 5, 1, 1, 1]
@@ -407,7 +407,7 @@ def main():
     args.target_type = "bpe"#word就是整合词编码，写一个bpe的方案
     args.use_decoder = True  # 是否使用encoder后的编码作为decoder输入   EAD
     args.OOV_Integrate = False  # 是否将oov进行池化
-    args.use_cat = True  # 是否添加MLP层来增强
+    args.use_cat = False  # 是否添加MLP层来增强
     args.use_part_label = False  # 是否为部分实体使用部分实体标签
     args.use_part_entity = False  # 是否使用部分实体的概念
     args.use_biaffine1 = True
