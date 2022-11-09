@@ -1,5 +1,6 @@
 import torch
 from .modeing_bart import BartEncoder, BartDecoder, BartModel
+from .modeing_bart import EncoderLayer,DecoderLayer
 from transformers import BartTokenizer
 from fastNLP import seq_len_to_mask
 from fastNLP.modules import Seq2SeqEncoder, Seq2SeqDecoder, State
@@ -694,7 +695,7 @@ class CaGFBartDecoder(FBartDecoder):
             mask = torch.cat((torch.zeros([len(mask),1]).to(mask.device)==0,mask[:,1:2],mask[:,len(self.mapping)+1:]),dim=1)
             type = torch.zeros_like(mask).long()
             type[:,0]=1
-            total_embedding +=self.distance_embedding(type)
+            total_embedding = total_embedding + self.distance_embedding(type)
             '''是在不行就一次放一半'''
             ATTEND_embed = self.Attend(total_embedding, mask)  # 放到两位
             word_scores_2 = self.special_output(ATTEND_embed[:,1:]).squeeze(-1)  # 最后结果
