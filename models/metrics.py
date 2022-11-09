@@ -1,0 +1,64 @@
+
+from fastNLP import MetricBase
+from fastNLP.core.metrics import _compute_f_pre_rec
+import numpy as np
+import json
+
+
+class Seq2SeqSpanMetric(MetricBase):
+    def __init__(self):
+        super(Seq2SeqSpanMetric, self).__init__()
+        self.task = ["Onto5","conll03","ace2004","ace2005","genia","cadce","share2013","share2014"]
+        self.total_entity=0
+
+    def evaluate(self, target_span, pred,sample_id=None):
+        all_fn = []
+        all_fp = []
+        all_tp = []
+        for i, (ts, ps) in enumerate(zip(target_span, pred)):
+            if sample_id is not None:
+                tp, fn, fp = self._compute_tp_fn_fp(ps, ts,sample_id[i])
+            else:
+                tp, fn, fp = self._compute_tp_fn_fp(ps, ts)
+            all_fn.append(fn)
+            all_tp.append(tp)
+            all_fp.append(fp)
+        return all_fn,all_tp,all_fp
+
+
+    def _compute_tp_fn_fp(self,ps, ts,sample_id=None):
+        ps = ps.copy()
+        tp = 0
+        fp = 0
+        fn = 0
+        if isinstance(ts, (set, list, np.ndarray)):
+            ts = {tuple(key):1 for key in list(ts)}
+        if isinstance(ps, (set, list, np.ndarray)):
+            ps = {tuple(key):1 for key in list(ps)}
+
+        #给一下边界的预测情况，边界对就算对
+        # ts = {tuple(key[0:-1]): 1 for key in list(ts)}
+        # ps = {tuple(key[0:-1]): 1 for key in list(ps)}
+        self.total_entity +=len(ts)
+        # for pp in ts.keys():
+        #     if pp
+        for key in ts.keys():
+            t_num = ts[key]
+            if key not in ps:
+                p_num = 0
+            else:
+                p_num = ps[key]
+            tp += min(p_num, t_num)
+            fp += max(p_num - t_num, 0)
+            fn += max(t_num - p_num, 0)
+            if key in ps:
+                ps.pop(key)
+        fp += sum(ps.values())
+        '''计算一下错误的'''
+        if sample_id is not None:
+            error_id_span=json.load(open("/home/wyq/BARTNER-main/data/ace2005/sample_error_entity", encoding="utf-8"))#记录所有错误的预测实体
+            for key,val in ps.items():
+                if key not in error_id_span[sample_id]:
+                    error_id_span[sample_id].append(key)
+            json.dump(error_id_span, open("/home/wyq/BARTNER-main/data/ace2005/sample_error_entity", "w", encoding="utf-8"))
+        return tp, fn, fp
