@@ -971,35 +971,35 @@ class BartSeq2SeqModel(Seq2SeqModel):
         '''化成两块，小于12，大于12'''
         prefix_len = len(self.decoder.mapping)
         if (all_word_entity_length <=10).sum() > 0:#可能也没有
-            noo_entity_pos = torch.nonzero(all_word_entity_length<=10).squeeze(-1)
-            if (tgt_seq_len[noo_entity_pos]-2).sum()*mask_query.size(1)>40000:
-                #分两块处理,一块是mask_qery小的，一块是mask_query大的
-                print("进入")
-                mask_lens = mask_query[indices[noo_entity_pos]].sum(dim=-1)
-                mask_pos = torch.nonzero(mask_lens<=70).squeeze(-1)
-                noo_entity_pos1 = noo_entity_pos[mask_pos]
-                pos1 = indices[noo_entity_pos1]
-                tgt_tokens1 = tgt_tokens[noo_entity_pos1, 0:10]  # 只需要前3个
-                state = BartState(decoder_encoder[pos1][:,0:70], decoder_encoder_mask[pos1][:,0:70], mask_query[pos1][:,0:70+prefix_len]
-                                  , org_mask[pos1][:,0:70], org_embedding[pos1][:,0:70], tgt_seq_len[noo_entity_pos1])
-                decoder_output[noo_entity_pos1, 0:8,0:70+prefix_len] = self.decoder(tgt_tokens1, state)  # 问题是有可能有些batch没有机会有起点
-                #2
-                mask_pos = torch.nonzero(mask_lens > 70).squeeze(-1)
-                if len(mask_pos)>0:
-                    noo_entity_pos1 = noo_entity_pos[mask_pos]
-                    pos1 = indices[noo_entity_pos1]
-                    tgt_tokens1 = tgt_tokens[noo_entity_pos1, 0:10]  # 只需要前3个
-                    state = BartState(decoder_encoder[pos1], decoder_encoder_mask[pos1], mask_query[pos1]
-                                      , org_mask[pos1], org_embedding[pos1], tgt_seq_len[noo_entity_pos1])
-                    decoder_output[noo_entity_pos1, 0:8] = self.decoder(tgt_tokens1, state)  # 问题是有可能有些batch没有机会有起点
-            else:
+            # noo_entity_pos = torch.nonzero(all_word_entity_length<=10).squeeze(-1)
+            # if (tgt_seq_len[noo_entity_pos]-2).sum()*mask_query.size(1)>50000:
+            #     #分两块处理,一块是mask_qery小的，一块是mask_query大的
+            #     print("进入")
+            #     mask_lens = mask_query[indices[noo_entity_pos]].sum(dim=-1)
+            #     mask_pos = torch.nonzero(mask_lens<=70).squeeze(-1)
+            #     noo_entity_pos1 = noo_entity_pos[mask_pos]
+            #     pos1 = indices[noo_entity_pos1]
+            #     tgt_tokens1 = tgt_tokens[noo_entity_pos1, 0:10]  # 只需要前3个
+            #     state = BartState(decoder_encoder[pos1][:,0:70], decoder_encoder_mask[pos1][:,0:70], mask_query[pos1][:,0:70+prefix_len]
+            #                       , org_mask[pos1][:,0:70], org_embedding[pos1][:,0:70], tgt_seq_len[noo_entity_pos1])
+            #     decoder_output[noo_entity_pos1, 0:8,0:70+prefix_len] = self.decoder(tgt_tokens1, state)  # 问题是有可能有些batch没有机会有起点
+            #     #2
+            #     mask_pos = torch.nonzero(mask_lens > 70).squeeze(-1)
+            #     if len(mask_pos)>0:
+            #         noo_entity_pos1 = noo_entity_pos[mask_pos]
+            #         pos1 = indices[noo_entity_pos1]
+            #         tgt_tokens1 = tgt_tokens[noo_entity_pos1, 0:10]  # 只需要前3个
+            #         state = BartState(decoder_encoder[pos1], decoder_encoder_mask[pos1], mask_query[pos1]
+            #                           , org_mask[pos1], org_embedding[pos1], tgt_seq_len[noo_entity_pos1])
+            #         decoder_output[noo_entity_pos1, 0:8] = self.decoder(tgt_tokens1, state)  # 问题是有可能有些batch没有机会有起点
+            # else:
                 #分两块处理
-                pos1 = indices[noo_entity_pos]
-                mask_lens = mask_query[indices[noo_entity_pos]].sum(dim=-1).max()
-                tgt_tokens1= tgt_tokens[noo_entity_pos,0:10]#只需要前3个
-                state=BartState(decoder_encoder[pos1][:,0:mask_lens], decoder_encoder_mask[pos1][:,0:mask_lens], mask_query[pos1][:,0:mask_lens+prefix_len]
-                                ,org_mask[pos1][:,0:mask_lens],org_embedding[pos1][:,0:mask_lens],tgt_seq_len[noo_entity_pos])
-                decoder_output[noo_entity_pos,0:8,0:mask_lens+prefix_len] = self.decoder(tgt_tokens1, state)#问题是有可能有些batch没有机会有起点
+            pos1 = indices[noo_entity_pos]
+            mask_lens = mask_query[indices[noo_entity_pos]].sum(dim=-1).max()
+            tgt_tokens1= tgt_tokens[noo_entity_pos,0:10]#只需要前3个
+            state=BartState(decoder_encoder[pos1][:,0:mask_lens], decoder_encoder_mask[pos1][:,0:mask_lens], mask_query[pos1][:,0:mask_lens+prefix_len]
+                            ,org_mask[pos1][:,0:mask_lens],org_embedding[pos1][:,0:mask_lens],tgt_seq_len[noo_entity_pos])
+            decoder_output[noo_entity_pos,0:8,0:mask_lens+prefix_len] = self.decoder(tgt_tokens1, state)#问题是有可能有些batch没有机会有起点
         # if ((all_word_entity_length >8) & (all_word_entity_length <=18)).sum() > 0:#可能也没有
         #     noo_entity_pos = torch.nonzero((all_word_entity_length >8) & (all_word_entity_length <=18)).squeeze(-1)
         #     pos1 = indices[noo_entity_pos]
