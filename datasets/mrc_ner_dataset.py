@@ -24,6 +24,8 @@ from scipy import stats
 import time
 
 from torch.utils.data import Dataset, DataLoader, BatchSampler
+
+
 # seed_num = 666
 # random.seed(seed_num)
 # os.environ['PYTHONHASHSEED'] = str(seed_num)
@@ -49,7 +51,7 @@ class MRCNERDataset(Dataset):  # 改进，让它能同时处理两种任务的�
     def __init__(self, task_data, tokenizer: BertWordPieceTokenizer, max_length: int = 128,
                  pad_to_maxlen=False, prefix="train", task_id=6, label2token=None,  # 每个标签对应的token
                  Negative_sampling=1, part_entity_Negative_sampling=None,
-                 target_type='word',use_part_label=True,use_part_entity=False,Discontinue=False,
+                 target_type='word', use_part_label=True, use_part_entity=False, Discontinue=False,
                  non_entity_label=True,
                  ):  # 默认是NER任务
         self.all_data = task_data
@@ -66,13 +68,14 @@ class MRCNERDataset(Dataset):  # 改进，让它能同时处理两种任务的�
         self.target_type = target_type
         self.Discontinue = Discontinue
         self.use_part_entity = use_part_entity
-        self.non_entity_label = non_entity_label#非实体和部分实体是否需要1的结束符号
+        self.non_entity_label = non_entity_label  # 非实体和部分实体是否需要1的结束符号
         self.label_lengths = len(self.label2token)
 
         '''增加n个新的标签'''
 
     def get_task_id(self):
         return self.task_coding
+
     def __len__(self):
         return len(self.result_all_data)
 
@@ -171,9 +174,14 @@ class MRCNERDataset(Dataset):  # 改进，让它能同时处理两种任务的�
         '''
             这里讲一下处理格式《s》 实体类型 具体实体 《/s》终止
         '''
+        '''
+            使用query的方式进一步解决：
+            1、先测试随机初始化10个单词
+
+        '''
         target_shift = 2 + self.label_lengths  # 是由于第一位是sos，紧接着是eos, 然后是"<,>",是一个实体分割符
         if self.use_part_label:
-            real_label_start = 2 + self.label_lengths-1  # 严格标签的起点位置
+            real_label_start = 2 + self.label_lengths - 1  # 严格标签的起点位置
         else:
             real_label_start = 2 + self.label_lengths
         ins = self.calculate1(self.result_all_data[item])
@@ -229,7 +237,7 @@ class MRCNERDataset(Dataset):  # 改进，让它能同时处理两种任务的�
                     raise RuntimeError("Not support other tagging")
                 cur_pair.extend([p + target_shift for p in cur_pair_])  # extend就是追加的意思，相当于+
             assert all([cur_pair[i] < cum_lens[-1] + target_shift for i in range(len(cur_pair))])
-            if self.target_type=="word":#'''转化为整词的位置'''
+            if self.target_type == "word":  # '''转化为整词的位置'''
                 for ifd in range(len(cur_pair)):
                     for jd in range(len(OOV_con)):
                         if cur_pair[ifd] - target_shift in OOV_con[jd]:
@@ -241,18 +249,19 @@ class MRCNERDataset(Dataset):  # 改进，让它能同时处理两种任务的�
         target.append(1)  # 结尾符号
         '''实体的具体位置'''
         word_bpes = list(chain(*word_bpes))
-        if self.target_type=="word":
-            mask_query =[0]+[1]+(target_shift-2)*[0]+[0]+(len(OOV_con)-2)*[1]+[0]#不可能生成标签，所以标签的mask为0
-        else:#bpe范式
-            mask_query = [0] +[1]+ (target_shift - 2) * [0] + [0] + (len(word_bpes) - 2) * [1] + [0]
+        if self.target_type == "word":
+            mask_query = [0] + [1] + (target_shift - 2) * [0] + [0] + (len(OOV_con) - 2) * [1] + [
+                0]  # 不可能生成标签，所以标签的mask为0
+        else:  # bpe范式
+            mask_query = [0] + [1] + (target_shift - 2) * [0] + [0] + (len(word_bpes) - 2) * [1] + [0]
         assert len(word_bpes) < 500
         OOV_con_result = []
         '''对于bpe模式需要给出那些token是实体的起点token'''
-        bpe_first = [l[0]+target_shift for l in OOV_con]
-        bpe_tail = [l[-1]+target_shift for l in OOV_con]
-        OOV_dict={}#每个值对应的序列
+        bpe_first = [l[0] + target_shift for l in OOV_con]
+        bpe_tail = [l[-1] + target_shift for l in OOV_con]
+        OOV_dict = {}  # 每个值对应的序列
         for i in OOV_con:
-            OOV_dict[i[0]]=i
+            OOV_dict[i[0]] = i
         for its in OOV_con:
             temp = max_OOV_len * [-1]
             temp[0:len(its)] = its
@@ -262,9 +271,9 @@ class MRCNERDataset(Dataset):  # 改进，让它能同时处理两种任务的�
         mask_query = torch.LongTensor(mask_query)  # 放在设备2
         OOV_con = torch.LongTensor(OOV_con_result)
         '''给其中的非头分词标注为 1'''
-        bpe_tail_flag=[]
+        bpe_tail_flag = []
         for ik in range(len(mask_query)):
-            if ik<target_shift+1:
+            if ik < target_shift + 1:
                 bpe_tail_flag.append(0)
             elif ik in bpe_tail:
                 bpe_tail_flag.append(0)
@@ -281,11 +290,11 @@ class MRCNERDataset(Dataset):  # 改进，让它能同时处理两种任务的�
                 bpe_head_flag.append(1)
         '''对于实体首词，直接接结束符，不能是0,1,2,以及标签字符，默认这里使用分词合并'''
         all_word_entity = []
-        all_labels=set()#记录出现了那些标签
+        all_labels = set()  # 记录出现了那些标签
         '''获得每个词的下一词有哪些'''
         if self.prefix == "train":
-            for i in range(target_shift+1,len(mask_query)-1):#最后一个点不能训练的
-                if self.target_type=='bpe' and i not in bpe_first:#是头分词才能开始运算
+            for i in range(target_shift + 1, len(mask_query) - 1):  # 最后一个点不能训练的
+                if self.target_type == 'bpe' and i not in bpe_first:  # 是头分词才能开始运算
                     continue
                 else:
                     temp_entity = []  #
@@ -294,23 +303,23 @@ class MRCNERDataset(Dataset):  # 改进，让它能同时处理两种任务的�
                             if [0] + j not in temp_entity:  # 去掉重复
                                 temp_entity.append([0] + j[-1:] + j[0:-1] + [1])  # 没必要接终点符号
                                 all_labels.add(j[-1])
-                    if len(temp_entity)>0:#这个位置对应的实体
+                    if len(temp_entity) > 0:  # 这个位置对应的实体
                         for ki in temp_entity:
                             if ki not in all_word_entity:  # 去重
                                 all_word_entity.append(ki)
-            #需要补充每个标签的位置:
-            for la in range(2,2+self.label_lengths):
-                if la not in all_labels:
-                    all_word_entity.append([0,la,1])
-        else:#测试的时候,以每种类型实体作为起点即可
+            # 需要补充每个标签的位置:
             for la in range(2, 2 + self.label_lengths):
-                    all_word_entity.append([0, la])
-        all_word_entity_label=[]#所有的标签
-        #计算标签，从具体实体标签后计算标签
+                if la not in all_labels:
+                    all_word_entity.append([0, la, 1])
+        else:  # 测试的时候,以每种类型实体作为起点即可
+            for la in range(2, 2 + self.label_lengths):
+                all_word_entity.append([0, la])
+        all_word_entity_label = []  # 所有的标签
+        # 计算标签，从具体实体标签后计算标签
         for k_po, i_en in enumerate(all_word_entity):
             labelNow = []
             for po, j_token in enumerate(i_en[0:-1]):
-                Initial = [0] * len(mask_query)#初始化的标签
+                Initial = [0] * len(mask_query)  # 初始化的标签
                 '''可能就存在多标签的问题了'''
                 Initial[i_en[po + 1]] = 1  # 首先，放置它应该有的标签
                 for k_po2, i_en2 in enumerate(all_word_entity):  # 是否是多标签，多个可能
@@ -320,46 +329,45 @@ class MRCNERDataset(Dataset):  # 改进，让它能同时处理两种任务的�
             all_word_entity_label.append(labelNow)
         '''##################'''
         '''接下来是给解码长度补齐'''
-        target_max_len = max([len(ix) for ix in all_word_entity])#单词长度补齐
+        target_max_len = max([len(ix) for ix in all_word_entity])  # 单词长度补齐
         new_all_target = []
         tgt_seq_len = []  # 记录生成块的
-        target_mask=[]#选择那些token会进行计算
+        target_mask = []  # 选择那些token会进行计算
         for ix in all_word_entity:
             tgt_seq_len.append(len(ix))
             temp = [1] * target_max_len
             temp[0:len(ix)] = ix
-            new_all_target.append(copy.deepcopy(temp))#填充完的结果
-            #因为第一个点和 起点符号生成的值不需要学习
-            target_mask.append([0] * 1 + [1]*(len(ix) - 1) + (target_max_len - len(ix)) * [0])#第一个点不需要学习
+            new_all_target.append(copy.deepcopy(temp))  # 填充完的结果
+            # 因为第一个点和 起点符号生成的值不需要学习
+            target_mask.append([0] * 1 + [1] * (len(ix) - 1) + (target_max_len - len(ix)) * [0])  # 第一个点不需要学习
         '''记录每个tgt的长度'''
-        max_mid_len = max([len(ix) for ix in all_word_entity_label])#每个句子中的标签数
+        max_mid_len = max([len(ix) for ix in all_word_entity_label])  # 每个句子中的标签数
         total_labels = []
         '''加一项，每个序列对应的标签长度'''
         for iz in all_word_entity_label:
             temp_labels = []
             for ki in range(max_mid_len):
                 if ki >= len(iz):
-                    now_label=[0] * len(mask_query)#填充点不需要标签
+                    now_label = [0] * len(mask_query)  # 填充点不需要标签
                 else:
-                    now_label=iz[ki]
+                    now_label = iz[ki]
                 temp_labels.append(now_label)
             total_labels.append(copy.deepcopy(temp_labels))
-        #标注那些标签是填充的
+        # 标注那些标签是填充的
         cal_label_mask = []
         for i in new_all_target:  # target_number,tgt_len
             temp_mask = []
-            temp_mask.append([0] * len(mask_query))#第一个不学习
+            temp_mask.append([0] * len(mask_query))  # 第一个不学习
             for jPos, j in enumerate(i[1:-1]):
-                if jPos==0:#第一个字符,可以是所有单词
-                    temp_mask.append([0] + [1] + [0]*(target_shift - 2) + [0] +[1] * (len(mask_query) - target_shift-2)+[0])
-                elif j==1:#是填充的，只能是后序单词
-                    temp_mask.append([0]*len(mask_query))
-                else:#非填充，且是正式开始生成实体
-                    # temp_mask.append(
-                    #     [0] + [1] + [0] * (target_shift - 2) + [0] + [1] * (len(mask_query) - target_shift - 2) + [0])
-                    temp_label = [0] + [1] + [0]*(target_shift - 2) + [0] * (len(mask_query) - target_shift)
+                if jPos == 0:  # 第一个字符,可以是所有单词
+                    temp_mask.append(
+                        [0] + [1] + [0] * (target_shift - 2) + [0] + [1] * (len(mask_query) - target_shift - 2) + [0])
+                elif j == 1:  # 是填充的，只能是后序单词
+                    temp_mask.append([0] * len(mask_query))
+                else:  # 非填充，且是正式开始生成实体
+                    temp_label = [0] + [1] + [0] * (target_shift - 2) + [0] * (len(mask_query) - target_shift)
                     if j > target_shift:
-                        for jIndex in range(j + 1,len(temp_label)-1):
+                        for jIndex in range(j + 1, len(temp_label) - 1):
                             temp_label[jIndex] = 1  # 下一个点参加训练
                     temp_mask.append(copy.deepcopy(temp_label))
             cal_label_mask.append(temp_mask)
@@ -375,7 +383,7 @@ class MRCNERDataset(Dataset):  # 改进，让它能同时处理两种任务的�
             len(word_bpes),  # 输入长
             pairs,
             sample_id,
-            0 if ins["type"]=='dev' else 1
+            0 if ins["type"] == 'dev' else 1
         ]
 
     def pad(self, lst, value=0, max_length=None):
@@ -411,12 +419,13 @@ class MultiTaskBatchSampler(BatchSampler):
         self._datasets = datasets
         self._batch_size = batch_size
         self.mix_opt = mix_opt
-        token_len = datasets.token_len#每个句子的token个数
-        train_data_list=self._get_shuffled_index_batches(len(datasets), batch_size,token_len)  # dataset存的是所有任务的任务数据集
+        token_len = datasets.token_len  # 每个句子的token个数
+        train_data_list = self._get_shuffled_index_batches(len(datasets), batch_size, token_len)  # dataset存的是所有任务的任务数据集
         self._train_data_list = train_data_list  # 这里每个batch中
-        if self.mix_opt=="train":#训练的话需要打乱
+        if self.mix_opt == "train":  # 训练的话需要打乱
             random.shuffle(self._train_data_list)
-    def _get_shuffled_index_batches(self,dataset_len, batch_size,token_len,token_idmax=5000):  # dataset_len这个是指的行数，
+
+    def _get_shuffled_index_batches(self, dataset_len, batch_size, token_len, token_idmax=5000):  # dataset_len这个是指的行数，
         '''根据最大长度限制的采样'''
         i = 0
         index_batches = []
@@ -428,7 +437,7 @@ class MultiTaskBatchSampler(BatchSampler):
                 token_lenss = max(token_len[i:min(i + temp_batchsize, dataset_len)]) * temp_batchsize
             index_batches = index_batches + [list(range(i, min(i + temp_batchsize, dataset_len)))]
             i = i + temp_batchsize
-        if self.mix_opt=="train":#训练的话需要打乱
+        if self.mix_opt == "train":  # 训练的话需要打乱
             random.shuffle(index_batches)
         return index_batches
 
@@ -445,7 +454,7 @@ class MultiTaskBatchSampler(BatchSampler):
         for i in range(0, len(train_data_list)):
             all_indices += [i] * len(train_data_list[i])
         all_indices += [0] * len(train_data_list[0])
-        if mix_opt=="test":
+        if mix_opt == "test":
             random.shuffle(all_indices)
         return all_indices  # 按照batch将所有的数据集都打乱
 

@@ -407,7 +407,7 @@ def main():
     args.target_type = "bpe"#word就是整合词编码，写一个bpe的方案
     args.use_decoder = True  # 是否使用encoder后的编码作为decoder输入   EAD
     args.OOV_Integrate = False  # 是否将oov进行池化
-    args.use_cat = False  # 是否添加MLP层来增强
+    args.use_cat = True  # 是否添加MLP层来增强
     args.use_part_label = False  # 是否为部分实体使用部分实体标签
     args.use_part_entity = False  # 是否使用部分实体的概念
     args.use_biaffine1 = True
