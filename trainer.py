@@ -190,7 +190,7 @@ class BertLabeling(pl.LightningModule):
         #      'weight_decay': config.weight_decay},
         # ]
         bart1="seq2seq_model.decoder.decoder"
-        bart2 =" seq2seq_model.encoder.bart_encoder"
+        bart2 ="seq2seq_model.encoder.bart_encoder"
         bert_parms=[]
         other_params=[]
         '''冻住一层，也即每个单词的基本意思不变，利于推广'''
