@@ -766,7 +766,7 @@ class TrainerTrainLoopMixin(ABC):
     def should_check_val(self, batch_idx, is_last_batch):
         # decide if we should run validation
         is_val_check_batch = (batch_idx + 1) % self.val_check_batch == 0
-        can_check_epoch = (self.current_epoch + 1) % self.check_val_every_n_epoch == 0 and self.current_epoch + 1 > 3
+        can_check_epoch = (self.current_epoch + 1) % self.check_val_every_n_epoch == 0 and self.current_epoch + 1 > 5
         can_check_val = self.enable_validation and can_check_epoch
         should_check_val = is_val_check_batch or self.should_stop
         is_last_batch_for_infinite_dataset = (is_last_batch and self.val_check_batch == float('inf'))
