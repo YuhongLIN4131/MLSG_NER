@@ -238,7 +238,7 @@ class Attentions(nn.Module):
         '''使用cat来计算一个注意力'''
         attention = self.biaffine2(context_Q, query_K).squeeze(-1)  # batch,seq,n
         if len(mask_query.size())==2:
-            attention=attention.masked_fill(~mask_query.unsqueeze(1),float("-inf"))#填充屏蔽不可能的标签
+            attention=attention.masked_fill(~mask_query.unsqueeze(1),-10000)#填充屏蔽不可能的标签
         else:#3维度
             attention = attention.masked_fill(~mask_query, float("-inf"))  # 填充屏蔽不可能的标签
         attention = nn.Softmax(dim=-1)(attention)
@@ -435,7 +435,7 @@ class FBartDecoder(Seq2SeqDecoder):
         self.OOV_Integrate = OOV_Integrate
         '''让数据集不为非连续时，不需要距离编码的'''
         self.label_ids = label_ids
-        mapping = torch.LongTensor([0,1]+label_ids)  #存储特殊符号的token,
+        mapping = torch.LongTensor([0,2]+label_ids)  #存储特殊符号的token,
         self.register_buffer('mapping', mapping)
         '''可以增加一个关于OOV分词的编码，若是分词则只能'''
         hidden_size = decoder.embed_tokens.weight.size(1)
@@ -454,7 +454,7 @@ class FBartDecoder(Seq2SeqDecoder):
             '''使用LSTM吸收标签间的交互信息'''
             # self.birnn = nn.LSTM(hidden_size,self.hid_size, num_layers=1, bidirectional=True,
             #                      batch_first=True)
-            # # self.distance_embedding = nn.Embedding(2, 1024)
+            # self.distance_embedding = nn.Embedding(2, 1024)
 
             # self.W1 = nn.Parameter(torch.Tensor(hidden_size, hidden_size * 4))
             # self.U1 = nn.Parameter(torch.Tensor(hidden_size, hidden_size * 4))

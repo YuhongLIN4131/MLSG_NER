@@ -399,7 +399,7 @@ def main():
     args.dataset_name = "ace2004"  #任务名"Onto":0,"conll03":1,"ace2004":3,"ace2005":4,'genia':5,'cadec':6,'share2013':7,'share2014':8
     args.data_dir = '/home/wyq/BARTNER-main/data/' + args.dataset_name
     args.task_id=TASK_ID2STRING[args.dataset_name]#任务id
-    args.gradient_clip_val = 5.0#
+    args.gradient_clip_val = 1.0#
     args.max_epochs=TASK_ID2_epoch[args.dataset_name]#
     args.lr = TASK_ID2_BARTLR[args.dataset_name]
     '''关于模型的超参数'''
